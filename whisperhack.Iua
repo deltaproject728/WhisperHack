@@ -1,841 +1,856 @@
--- ============================================
--- BBC ULTIMATE v6.0 - МАКСИМАЛЬНАЯ ОПТИМИЗАЦИЯ
--- Поддержка ПК + Mobile (FPS 60+ на слабых устройствах)
--- ============================================
+-- ═══════════════════════════════════════
+-- ONYX v67 | Chechnya 1994 | Full Build
+-- PC: RShift = show/hide
+-- Mobile: Floating "L" button
+-- ═══════════════════════════════════════
 
--- ===== ОПРЕДЕЛЯЕМ УСТРОЙСТВО =====
+local Players          = game:GetService("Players")
+local RunService       = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local IsMobile = UserInputService.TouchEnabled
-local IsPC = not IsMobile
+local TweenService     = game:GetService("TweenService")
+local Camera           = workspace.CurrentCamera
+local LocalPlayer      = Players.LocalPlayer
 
--- ===== НАСТРОЙКИ ПРОИЗВОДИТЕЛЬНОСТИ =====
-local Performance = {
-    -- Режимы оптимизации
-    Mode = "Auto", -- Auto, Performance, Balanced, Quality
-    
-    -- Ограничения
-    MaxESPObjects = IsMobile and 20 or 50,
-    MaxLootObjects = IsMobile and 10 or 30,
-    UpdateRate = IsMobile and 0.1 or 0.05,
-    RenderDistance = IsMobile and 200 or 500,
-    FOVUpdateRate = IsMobile and 0.2 or 0.05,
-    
-    -- Отключение тяжелых функций на мобиле
-    DisableTrails = IsMobile,
-    DisableChams = IsMobile,
-    DisableSkeleton = IsMobile,
-    DisableParticles = IsMobile,
-    DisableShadows = IsMobile,
-    
-    -- Качество
-    GraphicsQuality = IsMobile and "Low" or "High",
-    ESPQuality = IsMobile and "Low" or "High",
-}
-
--- ===== АВТО-НАСТРОЙКА ПОД УСТРОЙСТВО =====
-local function AutoOptimize()
-    local fps = game:GetService("Stats").Fps
-    local memory = game:GetService("Stats").Memory
-    
-    if IsMobile then
-        -- Мобильные настройки
-        Performance.MaxESPObjects = 15
-        Performance.MaxLootObjects = 8
-        Performance.UpdateRate = 0.15
-        Performance.RenderDistance = 150
-        Performance.DisableTrails = true
-        Performance.DisableChams = true
-        Performance.DisableSkeleton = true
-        Performance.DisableParticles = true
-        Performance.DisableShadows = true
-        Performance.GraphicsQuality = "Low"
-        Performance.ESPQuality = "Low"
-        
-        -- Отключаем тяжелые визуалы
-        VisualsSettings.NoFoliage = true
-        VisualsSettings.NoGrass = true
-        VisualsSettings.NoParticles = true
-        VisualsSettings.NoShadows = true
-        VisualsSettings.LowGraphics = true
-        
-        -- Уменьшаем FOV круг
-        if FOVCircle then
-            FOVCircle.NumSides = 32
-        end
-    else
-        -- ПК настройки (высокое качество)
-        Performance.MaxESPObjects = 50
-        Performance.MaxLootObjects = 30
-        Performance.UpdateRate = 0.05
-        Performance.RenderDistance = 500
-        Performance.DisableTrails = false
-        Performance.DisableChams = false
-        Performance.DisableSkeleton = false
-        Performance.DisableParticles = false
-        Performance.DisableShadows = false
-        Performance.GraphicsQuality = "High"
-        Performance.ESPQuality = "High"
-    end
+-- ═══════════════════════════════════════
+-- [ 0 ] LOG SUPPRESSOR
+-- ═══════════════════════════════════════
+local function safeHook(fn)
+    pcall(fn)
 end
 
--- ===== СИСТЕМА КЭШИРОВАНИЯ =====
-local Cache = {
-    Players = {},
-    Characters = {},
-    ESPObjects = {},
-    LootObjects = {},
-    LastUpdate = 0,
-}
-
--- ===== ОГРАНИЧЕНИЕ ЧАСТОТЫ ОБНОВЛЕНИЯ =====
-local function Throttle(func, delay)
-    local lastCall = 0
-    return function(...)
-        local now = tick()
-        if now - lastCall >= delay then
-            lastCall = now
-            return func(...)
-        end
+safeHook(function()
+    local ow = warn
+    warn = function(...)
+        local m = tostring(select(1,...)):lower()
+        if m:find("asset") or m:find("sound") or m:find("rbxasset")
+        or m:find("authorized") or m:find("approved") or m:find("channel") then return end
+        return ow(...)
     end
-end
-
--- ===== ОПТИМИЗИРОВАННЫЙ ПОИСК ИГРОКОВ =====
-local function GetPlayersOptimized()
-    local now = tick()
-    if now - Cache.LastUpdate < Performance.UpdateRate then
-        return Cache.Players
-    end
-    
-    Cache.LastUpdate = now
-    Cache.Players = {}
-    
-    for _, v in pairs(game.Players:GetPlayers()) do
-        if v ~= Player then
-            local char = v.Character
-            if char and char:FindFirstChild("Humanoid") then
-                local humanoid = char.Humanoid
-                if humanoid.Health > 0 then
-                    local root = char:FindFirstChild("HumanoidRootPart")
-                    if root then
-                        local dist = (root.Position - Character.HumanoidRootPart.Position).Magnitude
-                        if dist <= Performance.RenderDistance then
-                            table.insert(Cache.Players, {
-                                Player = v,
-                                Character = char,
-                                Humanoid = humanoid,
-                                Root = root,
-                                Distance = dist,
-                            })
-                        end
-                    end
-                end
-            end
-        end
-    end
-    
-    return Cache.Players
-end
-
--- ===== ОПТИМИЗИРОВАННЫЙ ESP =====
-local function OptimizedESP()
-    if not Settings.ESP then 
-        ClearESPObjects()
-        return 
-    end
-    
-    local players = GetPlayersOptimized()
-    
-    -- Очищаем старые объекты
-    ClearESPObjects()
-    
-    -- Создаем новые (с ограничением)
-    local count = 0
-    for _, data in pairs(players) do
-        if count >= Performance.MaxESPObjects then break end
-        
-        local char = data.Character
-        local color = Settings.PlayerColor or Color3.fromRGB(255, 0, 0)
-        
-        -- Только основные ESP на мобиле
-        if IsMobile then
-            -- Упрощенный ESP (только Highlight)
-            local highlight = Instance.new("Highlight")
-            highlight.Parent = char
-            highlight.FillColor = color
-            highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-            highlight.FillTransparency = 0.3
-            table.insert(Cache.ESPObjects, highlight)
-        else
-            -- Полный ESP на ПК
-            if Settings.ShowBox then
-                local box = CreateBox(char, color)
-                if box then table.insert(Cache.ESPObjects, box) end
-            end
-            
-            if Settings.ShowName or Settings.ShowHealth then
-                local info = CreateInfoLabel(char, color)
-                if info then table.insert(Cache.ESPObjects, info) end
-            end
-            
-            if Settings.ShowSkeleton and not Performance.DisableSkeleton then
-                local skeleton = CreateSkeleton(char, color)
-                if skeleton then table.insert(Cache.ESPObjects, skeleton) end
-            end
-        end
-        
-        count = count + 1
-    end
-end
-
--- ===== ОПТИМИЗИРОВАННЫЙ AIMBOT =====
-local function OptimizedAimbot()
-    if not Settings.Aimbot then return end
-    
-    local players = GetPlayersOptimized()
-    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-    local bestTarget = nil
-    local bestDist = math.huge
-    
-    for _, data in pairs(players) do
-        local char = data.Character
-        local hitbox = char:FindFirstChild(Settings.Hitbox) or char:FindFirstChild("HumanoidRootPart")
-        if not hitbox then continue end
-        
-        local targetPos = hitbox.Position
-        
-        -- Предсказание (упрощенное на мобиле)
-        if Settings.Prediction and not IsMobile then
-            local velocity = hitbox.Velocity
-            targetPos = targetPos + (velocity * Settings.PredictionAmount)
-        end
-        
-        local screenPos, onScreen = Camera:WorldToScreenPoint(targetPos)
-        if not onScreen then continue end
-        
-        local screenPos2D = Vector2.new(screenPos.X, screenPos.Y)
-        local dist = (screenPos2D - center).Magnitude
-        
-        if dist > Settings.FOV then continue end
-        
-        if dist < bestDist then
-            bestDist = dist
-            bestTarget = {
-                Character = char,
-                Position = targetPos,
-                Hitbox = hitbox,
-                Distance = data.Distance,
-            }
-        end
-    end
-    
-    return bestTarget
-end
-
--- ===== ОЧИСТКА ОБЪЕКТОВ =====
-local function ClearESPObjects()
-    for _, obj in pairs(Cache.ESPObjects) do
-        pcall(function() obj:Destroy() end)
-    end
-    Cache.ESPObjects = {}
-end
-
--- ===== ОПТИМИЗИРОВАННОЕ ОБНОВЛЕНИЕ =====
-local function OptimizedUpdate()
-    -- Обновляем ESP
-    if Settings.ESP then
-        OptimizedESP()
-    end
-    
-    -- Обновляем Aimbot
-    if Settings.Aimbot then
-        local target = OptimizedAimbot()
-        if target then
-            -- Применяем аим (упрощенный на мобиле)
-            if IsMobile then
-                -- Мобильный аим (только Silent Aim)
-                local weapon = Character:FindFirstChildOfClass("Tool")
-                if weapon and weapon:FindFirstChild("Handle") then
-                    weapon.Handle.CFrame = CFrame.lookAt(weapon.Handle.Position, target.Position)
-                end
-            else
-                -- ПК аим (полный)
-                local origin = Camera.CFrame.Position
-                local targetCF = CFrame.lookAt(origin, target.Position)
-                Camera.CFrame = Camera.CFrame:Lerp(targetCF, Settings.Smoothness / 100)
-            end
-        end
-    end
-end
-
--- ===== РЕЖИМЫ ПРОИЗВОДИТЕЛЬНОСТИ =====
-local function SetPerformanceMode(mode)
-    Performance.Mode = mode
-    
-    if mode == "Performance" then
-        -- Максимальная производительность
-        Performance.MaxESPObjects = IsMobile and 10 or 30
-        Performance.UpdateRate = IsMobile and 0.2 or 0.1
-        Performance.RenderDistance = IsMobile and 100 or 300
-        Performance.DisableTrails = true
-        Performance.DisableChams = true
-        Performance.DisableSkeleton = true
-        Performance.DisableParticles = true
-        Performance.DisableShadows = true
-        VisualsSettings.LowGraphics = true
-        VisualsSettings.NoFoliage = true
-        VisualsSettings.NoGrass = true
-        
-    elseif mode == "Balanced" then
-        -- Сбалансированный режим
-        Performance.MaxESPObjects = IsMobile and 15 or 40
-        Performance.UpdateRate = IsMobile and 0.15 or 0.075
-        Performance.RenderDistance = IsMobile and 150 or 400
-        Performance.DisableTrails = IsMobile
-        Performance.DisableChams = IsMobile
-        Performance.DisableSkeleton = IsMobile
-        Performance.DisableParticles = IsMobile
-        Performance.DisableShadows = IsMobile
-        VisualsSettings.LowGraphics = IsMobile
-        VisualsSettings.NoFoliage = IsMobile
-        
-    elseif mode == "Quality" then
-        -- Максимальное качество
-        Performance.MaxESPObjects = IsMobile and 20 or 50
-        Performance.UpdateRate = IsMobile and 0.1 or 0.05
-        Performance.RenderDistance = IsMobile and 200 or 500
-        Performance.DisableTrails = false
-        Performance.DisableChams = false
-        Performance.DisableSkeleton = false
-        Performance.DisableParticles = false
-        Performance.DisableShadows = false
-        VisualsSettings.LowGraphics = false
-        VisualsSettings.NoFoliage = false
-        VisualsSettings.NoGrass = false
-        
-    else -- Auto
-        AutoOptimize()
-    end
-end
-
--- ===== ЗАПУСК ОПТИМИЗАЦИИ =====
-AutoOptimize()
-
--- ===== ЦИКЛ ОБНОВЛЕНИЯ (С ТРОТТЛИНГОМ) =====
-local throttledUpdate = Throttle(OptimizedUpdate, Performance.UpdateRate)
-
-RunService.Heartbeat:Connect(function()
-    throttledUpdate()
 end)
 
--- ===== ВИЗУАЛЬНЫЕ НАСТРОЙКИ (35 ФУНКЦИЙ) =====
-local VisualsFunctions = {
-    -- Основные (10)
-    ["No Recoil"] = {type = "toggle", default = false, callback = function(val) VisualsSettings.NoRecoil = val end},
-    ["No Spread"] = {type = "toggle", default = false, callback = function(val) VisualsSettings.NoSpread = val end},
-    ["No Sway"] = {type = "toggle", default = false, callback = function(val) VisualsSettings.NoSway = val end},
-    ["No Fog"] = {type = "toggle", default = false, callback = function(val) VisualsSettings.NoFog = val end},
-    ["No Foliage"] = {type = "toggle", default = IsMobile, callback = function(val) VisualsSettings.NoFoliage = val end},
-    ["No Grass"] = {type = "toggle", default = IsMobile, callback = function(val) VisualsSettings.NoGrass = val end},
-    ["No Particles"] = {type = "toggle", default = IsMobile, callback = function(val) VisualsSettings.NoParticles = val end},
-    ["No Shadows"] = {type = "toggle", default = IsMobile, callback = function(val) VisualsSettings.NoShadows = val end},
-    ["No Water"] = {type = "toggle", default = false, callback = function(val) VisualsSettings.NoWater = val end},
-    ["No Sky"] = {type = "toggle", default = false, callback = function(val) VisualsSettings.NoSky = val end},
-    
-    -- Освещение (5)
-    ["Brightness"] = {type = "slider", min = 0.5, max = 2, default = 1, callback = function(val) 
-        VisualsSettings.Brightness = val
-        game.Lighting.Brightness = val
-    end},
-    ["Day Mode"] = {type = "button", callback = function() 
-        game.Lighting.TimeOfDay = "14:00"
-        game.Lighting.Brightness = 1
-        VisualsSettings.DayMode = true
-        VisualsSettings.NightMode = false
-    end},
-    ["Night Mode"] = {type = "button", callback = function() 
-        game.Lighting.TimeOfDay = "00:00"
-        game.Lighting.Brightness = 0.3
-        VisualsSettings.NightMode = true
-        VisualsSettings.DayMode = false
-    end},
-    ["Full Bright"] = {type = "toggle", default = false, callback = function(val) 
-        VisualsSettings.FullBright = val
-        game.Lighting.Brightness = val and 2 or 1
-    end},
-    ["Reset Visuals"] = {type = "button", callback = function() 
-        game.Lighting.FogEnd = 1000
-        game.Lighting.FogStart = 0
-        game.Lighting.Brightness = 1
-        game.Lighting.TimeOfDay = "14:00"
-        VisualsSettings.NoFog = false
-        VisualsSettings.NoFoliage = false
-        VisualsSettings.NoGrass = false
-    end},
-    
-    -- Эффекты (5)
-    ["Show Hit Markers"] = {type = "toggle", default = false, callback = function(val) VisualsSettings.ShowHitMarkers = val end},
-    ["Show Damage Numbers"] = {type = "toggle", default = false, callback = function(val) VisualsSettings.ShowDamageNumbers = val end},
-    ["Show Kill Feed"] = {type = "toggle", default = false, callback = function(val) VisualsSettings.ShowKillFeed = val end},
-    ["Show Compass"] = {type = "toggle", default = false, callback = function(val) VisualsSettings.ShowCompass = val end},
-    ["Show Crosshair"] = {type = "toggle", default = false, callback = function(val) VisualsSettings.ShowCrosshair = val end},
-    
-    -- Качество (5)
-    ["Low Graphics"] = {type = "toggle", default = IsMobile, callback = function(val) 
-        VisualsSettings.LowGraphics = val
-        if val then SetPerformanceMode("Performance") end
-    end},
-    ["High Graphics"] = {type = "toggle", default = not IsMobile, callback = function(val) 
-        VisualsSettings.HighGraphics = val
-        if val then SetPerformanceMode("Quality") end
-    end},
-    ["Render Distance"] = {type = "slider", min = 100, max = 1000, default = IsMobile and 200 or 500, callback = function(val) 
-        Performance.RenderDistance = val
-    end},
-    ["FPS Boost"] = {type = "toggle", default = IsMobile, callback = function(val) 
-        VisualsSettings.FPSBoost = val
-        if val then SetPerformanceMode("Performance") end
-    end},
-    ["Graphics Quality"] = {type = "dropdown", options = {"Low", "Medium", "High"}, default = IsMobile and "Low" or "High", callback = function(val) 
-        if val == "Low" then SetPerformanceMode("Performance")
-        elseif val == "Medium" then SetPerformanceMode("Balanced")
-        elseif val == "High" then SetPerformanceMode("Quality") end
-    end},
-    
-    -- Кроссhair (5)
-    ["Crosshair Color"] = {type = "color", callback = function(color) VisualsSettings.CrosshairColor = color end},
-    ["Crosshair Size"] = {type = "slider", min = 10, max = 50, default = 20, callback = function(val) VisualsSettings.CrosshairSize = val end},
-    ["Crosshair Style"] = {type = "dropdown", options = {"Dot", "Cross", "Circle", "Plus"}, default = "Cross", callback = function(val) VisualsSettings.CrosshairStyle = val end},
-    ["Crosshair Opacity"] = {type = "slider", min = 0.1, max = 1, default = 0.8, callback = function(val) VisualsSettings.CrosshairOpacity = val end},
-    ["Crosshair Outline"] = {type = "toggle", default = true, callback = function(val) VisualsSettings.CrosshairOutline = val end},
+safeHook(function()
+    local CP  = game:GetService("ContentProvider")
+    local old = CP.PreloadAsync
+    CP.PreloadAsync = function(self, assets, cb)
+        return pcall(old, self, assets, cb)
+    end
+end)
+
+-- ═══════════════════════════════════════
+-- [ 1 ] ANTI-DETECTION
+-- ═══════════════════════════════════════
+safeHook(function()
+    if syn and syn.set_thread_identity then
+        syn.set_thread_identity(8)
+    elseif setthreadidentity then
+        setthreadidentity(8)
+    end
+end)
+
+local blockedKW = {
+    "cheat","hack","exploit","esp","aim","anticheat","ac_",
+    "report","kick","ban","detect","flag","suspicious","warn",
+    "inject","memory","speed","fly","noclip","bypass"
 }
 
--- ===== MISC - 35 ФУНКЦИЙ =====
-local MiscFunctions = {
-    -- Движение (8)
-    ["Fly"] = {type = "toggle", default = false, callback = function(val) Settings.Fly = val end},
-    ["No Clip"] = {type = "toggle", default = false, callback = function(val) Settings.NoClip = val end},
-    ["Infinite Jump"] = {type = "toggle", default = false, callback = function(val) Settings.InfiniteJump = val end},
-    ["Water Walk"] = {type = "toggle", default = false, callback = function(val) Settings.WaterWalk = val end},
-    ["Speed Hack"] = {type = "toggle", default = false, callback = function(val) Settings.SpeedHack = val end},
-    ["Fly Speed"] = {type = "slider", min = 10, max = 200, default = 50, callback = function(val) Settings.FlySpeed = val end},
-    ["Jump Power"] = {type = "slider", min = 10, max = 100, default = 50, callback = function(val) 
-        Settings.JumpPower = val
-        if Character:FindFirstChild("Humanoid") then Character.Humanoid.JumpPower = val end
-    end},
-    ["Walk Speed"] = {type = "slider", min = 16, max = 100, default = 16, callback = function(val) 
-        Settings.WalkSpeed = val
-        if Character:FindFirstChild("Humanoid") then Character.Humanoid.WalkSpeed = val end
-    end},
-    
-    -- Телепорты (6)
-    ["Teleport Center"] = {type = "button", callback = function() 
-        Character.HumanoidRootPart.CFrame = CFrame.new(0, 100, 0) 
-    end},
-    ["Teleport to Player"] = {type = "button", callback = function() 
-        local players = game.Players:GetPlayers()
-        if #players > 1 then
-            local target = players[math.random(#players)]
-            if target ~= Player and target.Character then
-                Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame + Vector3.new(0, 3, 0)
-            end
-        end
-    end},
-    ["Teleport to Spawn"] = {type = "button", callback = function() 
-        local spawn = workspace:FindFirstChild("SpawnLocation")
-        if spawn then Character.HumanoidRootPart.CFrame = spawn.CFrame end
-    end},
-    ["Teleport Up"] = {type = "button", callback = function() 
-        Character.HumanoidRootPart.CFrame = Character.HumanoidRootPart.CFrame + Vector3.new(0, 50, 0)
-    end},
-    ["Teleport to Mouse"] = {type = "button", callback = function() 
-        local mouse = Player:GetMouse()
-        if mouse then Character.HumanoidRootPart.CFrame = CFrame.new(mouse.Hit.Position + Vector3.new(0, 3, 0)) end
-    end},
-    ["Save Position"] = {type = "button", callback = function() 
-        Settings.SavedPosition = Character.HumanoidRootPart.CFrame
-        game.StarterGui:SetCore("SendNotification", {Title = "Saved", Text = "Position saved!", Duration = 1})
-    end},
-    ["Load Position"] = {type = "button", callback = function() 
-        if Settings.SavedPosition then Character.HumanoidRootPart.CFrame = Settings.SavedPosition end
-    end},
-    
-    -- Внешний вид (5)
-    ["Change Color"] = {type = "button", callback = function() 
-        local colors = {Color3.fromRGB(255,0,0), Color3.fromRGB(0,255,0), Color3.fromRGB(0,0,255), 
-                        Color3.fromRGB(255,255,0), Color3.fromRGB(255,0,255), Color3.fromRGB(0,255,255)}
-        local color = colors[math.random(#colors)]
-        for _, part in pairs(Character:GetChildren()) do
-            if part:IsA("BasePart") then
-                part.Color = color
-            end
-        end
-    end},
-    ["Change Size"] = {type = "slider", min = 0.5, max = 3, default = 1, callback = function(val) 
-        Settings.Size = val
-        for _, part in pairs(Character:GetChildren()) do
-            if part:IsA("BasePart") then
-                part.Size = part.Size * val
-            end
-        end
-    end},
-    ["Invisibility"] = {type = "toggle", default = false, callback = function(val) 
-        Settings.Invisible = val
-        for _, part in pairs(Character:GetChildren()) do
-            if part:IsA("BasePart") then
-                part.Transparency = val and 1 or 0
-            end
-        end
-    end},
-    ["Head Size"] = {type = "slider", min = 1, max = 10, default = 1, callback = function(val) 
-        local head = Character:FindFirstChild("Head")
-        if head then head.Size = Vector3.new(val, val, val) end
-    end},
-    ["Glow"] = {type = "toggle", default = false, callback = function(val) 
-        Settings.Glow = val
-        for _, part in pairs(Character:GetChildren()) do
-            if part:IsA("BasePart") then
-                part.Material = val and Enum.Material.Neon or Enum.Material.Plastic
-            end
-        end
-    end},
-    
-    -- Защита (6)
-    ["Anti AFK"] = {type = "toggle", default = false, callback = function(val) Settings.AntiAFK = val end},
-    ["Anti Ban"] = {type = "toggle", default = false, callback = function(val) Settings.AntiBan = val end},
-    ["Auto Respawn"] = {type = "toggle", default = false, callback = function(val) Settings.AutoRespawn = val end},
-    ["God Mode"] = {type = "toggle", default = false, callback = function(val) 
-        Settings.GodMode = val
-        if Character:FindFirstChild("Humanoid") then
-            Character.Humanoid.MaxHealth = val and math.huge or 100
-            Character.Humanoid.Health = val and math.huge or 100
-        end
-    end},
-    ["Infinite Ammo"] = {type = "toggle", default = false, callback = function(val) Settings.InfiniteAmmo = val end},
-    ["No Fall Damage"] = {type = "toggle", default = false, callback = function(val) Settings.NoFallDamage = val end},
-    
-    -- Утилиты (5)
-    ["Auto Clicker"] = {type = "toggle", default = false, callback = function(val) Settings.AutoClicker = val end},
-    ["Auto Sprint"] = {type = "toggle", default = false, callback = function(val) Settings.AutoSprint = val end},
-    ["Auto Jump"] = {type = "toggle", default = false, callback = function(val) Settings.AutoJump = val end},
-    ["Auto Heal"] = {type = "toggle", default = false, callback = function(val) Settings.AutoHeal = val end},
-    ["Auto Reload"] = {type = "toggle", default = false, callback = function(val) Settings.AutoReload = val end},
-    
-    -- Экстра (5)
-    ["Free Cam"] = {type = "toggle", default = false, callback = function(val) Settings.FreeCam = val end},
-    ["Zoom"] = {type = "slider", min = 1, max = 100, default = 70, callback = function(val) 
-        Settings.Zoom = val
-        Camera.FieldOfView = val
-    end},
-    ["Third Person"] = {type = "toggle", default = false, callback = function(val) 
-        Settings.ThirdPerson = val
-        Camera.CameraType = val and Enum.CameraType.ThirdPerson or Enum.CameraType.Custom
-    end},
-    ["Camera Shake"] = {type = "toggle", default = false, callback = function(val) Settings.CameraShake = val end},
-    ["Sprint Speed"] = {type = "slider", min = 16, max = 200, default = 50, callback = function(val) Settings.SprintSpeed = val end},
-}
-
--- ===== SOUNDS - 35 ФУНКЦИЙ =====
-local SoundsFunctions = {
-    -- Звуковые паки (12)
-    ["Sound Pack: Rust"] = {type = "button", callback = function() CurrentSoundPack = "Rust" end},
-    ["Sound Pack: CS:GO"] = {type = "button", callback = function() CurrentSoundPack = "CS:GO" end},
-    ["Sound Pack: COD"] = {type = "button", callback = function() CurrentSoundPack = "COD" end},
-    ["Sound Pack: PUBG"] = {type = "button", callback = function() CurrentSoundPack = "PUBG" end},
-    ["Sound Pack: Valorant"] = {type = "button", callback = function() CurrentSoundPack = "Valorant" end},
-    ["Sound Pack: Fortnite"] = {type = "button", callback = function() CurrentSoundPack = "Fortnite" end},
-    ["Sound Pack: Minecraft"] = {type = "button", callback = function() CurrentSoundPack = "Minecraft" end},
-    ["Sound Pack: Battlefield"] = {type = "button", callback = function() CurrentSoundPack = "Battlefield" end},
-    ["Sound Pack: TF2"] = {type = "button", callback = function() CurrentSoundPack = "TF2" end},
-    ["Sound Pack: Overwatch"] = {type = "button", callback = function() CurrentSoundPack = "Overwatch" end},
-    ["Sound Pack: Apex"] = {type = "button", callback = function() CurrentSoundPack = "Apex" end},
-    ["Sound Pack: Rainbow Six"] = {type = "button", callback = function() CurrentSoundPack = "RainbowSix" end},
-    
-    -- Настройки звука (8)
-    ["Test Sound"] = {type = "button", callback = function() PlayHeadshotSound() end},
-    ["Volume"] = {type = "slider", min = 0, max = 100, default = 80, callback = function(val) 
-        Settings.Volume = val / 100
-        for _, data in pairs(SoundPack) do data.volume = Settings.Volume end
-    end},
-    ["Pitch"] = {type = "slider", min = 0.5, max = 2, default = 1, callback = function(val) Settings.Pitch = val end},
-    ["Sound on Headshot"] = {type = "toggle", default = true, callback = function(val) Settings.HeadshotSound = val end},
-    ["Sound on Kill"] = {type = "toggle", default = true, callback = function(val) Settings.KillSound = val end},
-    ["Sound on Detection"] = {type = "toggle", default = false, callback = function(val) Settings.DetectionSound = val end},
-    ["Sound on Hit"] = {type = "toggle", default = true, callback = function(val) Settings.HitSound = val end},
-    ["Sound on Miss"] = {type = "toggle", default = false, callback = function(val) Settings.MissSound = val end},
-    
-    -- Эффекты (10)
-    ["Ding Sound"] = {type = "toggle", default = true, callback = function(val) Settings.DingSound = val end},
-    ["Double Kill"] = {type = "toggle", default = true, callback = function(val) Settings.DoubleKill = val end},
-    ["Triple Kill"] = {type = "toggle", default = true, callback = function(val) Settings.TripleKill = val end},
-    ["Multi Kill"] = {type = "toggle", default = true, callback = function(val) Settings.MultiKill = val end},
-    ["Headshot Echo"] = {type = "toggle", default = false, callback = function(val) Settings.HeadshotEcho = val end},
-    ["Kill Streak"] = {type = "toggle", default = true, callback = function(val) Settings.KillStreak = val end},
-    ["Death Sound"] = {type = "toggle", default = true, callback = function(val) Settings.DeathSound = val end},
-    ["Victory Sound"] = {type = "toggle", default = true, callback = function(val) Settings.VictorySound = val end},
-    ["Ambient Sounds"] = {type = "toggle", default = false, callback = function(val) Settings.AmbientSounds = val end},
-    ["Sound Delay"] = {type = "slider", min = 0, max = 500, default = 50, callback = function(val) Settings.SoundDelay = val / 1000 end},
-    
-    -- Дополнительно (5)
-    ["Voice Lines"] = {type = "toggle", default = false, callback = function(val) Settings.VoiceLines = val end},
-    ["Music on Kill"] = {type = "toggle", default = false, callback = function(val) Settings.MusicOnKill = val end},
-    ["Custom Sound URL"] = {type = "input", default = "", callback = function(val) Settings.CustomSound = val end},
-    ["Import Sound"] = {type = "button", callback = function() 
-        -- Импорт пользовательского звука
-        if Settings.CustomSound ~= "" then
-            SoundPack["Custom"] = {soundId = Settings.CustomSound, volume = Settings.Volume}
-            CurrentSoundPack = "Custom"
-        end
-    end},
-    ["Reset Sounds"] = {type = "button", callback = function() 
-        Settings.Volume = 0.8
-        Settings.Pitch = 1
-        Settings.HeadshotSound = true
-        Settings.KillSound = true
-        CurrentSoundPack = "CS:GO"
-        game.StarterGui:SetCore("SendNotification", {Title = "Sounds Reset", Text = "All sounds reset to default", Duration = 2})
-    end},
-}
-
--- ===== УПРАВЛЕНИЕ - 35 ФУНКЦИЙ =====
-local ControlsFunctions = {
-    -- Кнопки (6)
-    ["Open Menu"] = {type = "button", callback = function() OpenMenu() end},
-    ["Close Menu"] = {type = "button", callback = function() CloseMenu() end},
-    ["Toggle Menu"] = {type = "button", callback = function() ToggleMenu() end},
-    ["Reset Position"] = {type = "button", callback = function() ResetMenuPosition() end},
-    ["Minimize"] = {type = "button", callback = function() MinimizeMenu() end},
-    ["Maximize"] = {type = "button", callback = function() MaximizeMenu() end},
-    
-    -- Клавиши (8)
-    ["Menu Key"] = {type = "dropdown", options = {"F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "Insert", "Home", "End", "PageUp", "PageDown"}, default = "F1", callback = function(val) Settings.MenuKey = val end},
-    ["Aim Key"] = {type = "dropdown", options = {"MouseButton1", "MouseButton2", "Q", "E", "R", "F", "Shift", "Control", "Alt", "Space"}, default = "MouseButton2", callback = function(val) Settings.AimKey = val end},
-    ["ESP Key"] = {type = "dropdown", options = {"F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "Insert", "Home", "End"}, default = "F2", callback = function(val) Settings.ESPKey = val end},
-    ["Fly Key"] = {type = "dropdown", options = {"F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10"}, default = "F3", callback = function(val) Settings.FlyKey = val end},
-    ["Speed Key"] = {type = "dropdown", options = {"F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10"}, default = "F4", callback = function(val) Settings.SpeedKey = val end},
-    ["Teleport Key"] = {type = "dropdown", options = {"F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10"}, default = "F5", callback = function(val) Settings.TeleportKey = val end},
-    ["NoClip Key"] = {type = "dropdown", options = {"F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10"}, default = "F6", callback = function(val) Settings.NoClipKey = val end},
-    ["Trigger Key"] = {type = "dropdown", options = {"MouseButton1", "MouseButton2", "Q", "E", "R", "F", "Shift", "Control", "Alt", "Space"}, default = "MouseButton1", callback = function(val) Settings.TriggerKey = val end},
-    
-    -- Свайпы (6)
-    ["Swipe Open"] = {type = "toggle", default = true, callback = function(val) Settings.SwipeOpen = val end},
-    ["Swipe Close"] = {type = "toggle", default = true, callback = function(val) Settings.SwipeClose = val end},
-    ["Swipe Sensitivity"] = {type = "slider", min = 50, max = 200, default = 100, callback = function(val) Settings.SwipeSensitivity = val end},
-    ["Swipe Direction Open"] = {type = "dropdown", options = {"Right", "Left", "Up", "Down"}, default = "Right", callback = function(val) Settings.SwipeDirectionOpen = val end},
-    ["Swipe Direction Close"] = {type = "dropdown", options = {"Left", "Right", "Up", "Down"}, default = "Left", callback = function(val) Settings.SwipeDirectionClose = val end},
-    ["Swipe Feedback"] = {type = "toggle", default = true, callback = function(val) Settings.SwipeFeedback = val end},
-    
-    -- Горячие клавиши (5)
-    ["Hotkey 1"] = {type = "dropdown", options = {"None", "Fly", "ESP", "Aimbot", "NoClip", "Speed", "Teleport", "Silent Aim", "Trigger Bot", "Auto Fire"}, default = "None", callback = function(val) Settings.Hotkey1 = val end},
-    ["Hotkey 2"] = {type = "dropdown", options = {"None", "Fly", "ESP", "Aimbot", "NoClip", "Speed", "Teleport", "Silent Aim", "Trigger Bot", "Auto Fire"}, default = "None", callback = function(val) Settings.Hotkey2 = val end},
-    ["Hotkey 3"] = {type = "dropdown", options = {"None", "Fly", "ESP", "Aimbot", "NoClip", "Speed", "Teleport", "Silent Aim", "Trigger Bot", "Auto Fire"}, default = "None", callback = function(val) Settings.Hotkey3 = val end},
-    ["Hotkey 4"] = {type = "dropdown", options = {"None", "Fly", "ESP", "Aimbot", "NoClip", "Speed", "Teleport", "Silent Aim", "Trigger Bot", "Auto Fire"}, default = "None", callback = function(val) Settings.Hotkey4 = val end},
-    ["Hotkey 5"] = {type = "dropdown", options = {"None", "Fly", "ESP", "Aimbot", "NoClip", "Speed", "Teleport", "Silent Aim", "Trigger Bot", "Auto Fire"}, default = "None", callback = function(val) Settings.Hotkey5 = val end},
-    
-    -- Интерфейс (5)
-    ["Menu Opacity"] = {type = "slider", min = 0.1, max = 1, default = 0.95, callback = function(val) Settings.MenuOpacity = val end},
-    ["Menu Size"] = {type = "dropdown", options = {"Small", "Medium", "Large", "Full"}, default = "Medium", callback = function(val) Settings.MenuSize = val end},
-    ["Menu Color"] = {type = "color", callback = function(color) Settings.MenuColor = color end},
-    ["Menu Animation"] = {type = "toggle", default = true, callback = function(val) Settings.MenuAnimation = val end},
-    ["Menu Sound"] = {type = "toggle", default = true, callback = function(val) Settings.MenuSound = val end},
-    
-    -- Дополнительно (5)
-    ["Enable Touch"] = {type = "toggle", default = IsMobile, callback = function(val) Settings.EnableTouch = val end},
-    ["Enable Keyboard"] = {type = "toggle", default = not IsMobile, callback = function(val) Settings.EnableKeyboard = val end},
-    ["Enable Mouse"] = {type = "toggle", default = not IsMobile, callback = function(val) Settings.EnableMouse = val end},
-    ["Enable Gamepad"] = {type = "toggle", default = false, callback = function(val) Settings.EnableGamepad = val end},
-    ["Reset Controls"] = {type = "button", callback = function() ResetControls() end},
-}
-
--- ===== ДОПОЛНИТЕЛЬНО - 35 ФУНКЦИЙ =====
-local ExtraFunctions = {
-    -- Профили (5)
-    ["Save Profile"] = {type = "button", callback = function() SaveProfile() end},
-    ["Load Profile"] = {type = "button", callback = function() LoadProfile() end},
-    ["Delete Profile"] = {type = "button", callback = function() DeleteProfile() end},
-    ["Export Profile"] = {type = "button", callback = function() ExportProfile() end},
-    ["Import Profile"] = {type = "button", callback = function() ImportProfile() end},
-    
-    -- Конфиги (5)
-    ["Config 1"] = {type = "button", callback = function() LoadConfig(1) end},
-    ["Config 2"] = {type = "button", callback = function() LoadConfig(2) end},
-    ["Config 3"] = {type = "button", callback = function() LoadConfig(3) end},
-    ["Config 4"] = {type = "button", callback = function() LoadConfig(4) end},
-    ["Config 5"] = {type = "button", callback = function() LoadConfig(5) end},
-    
-    -- Автоматизация (5)
-    ["Auto Farm"] = {type = "toggle", default = false, callback = function(val) Settings.AutoFarm = val end},
-    ["Auto Loot"] = {type = "toggle", default = false, callback = function(val) Settings.AutoLoot = val end},
-    ["Auto Quest"] = {type = "toggle", default = false, callback = function(val) Settings.AutoQuest = val end},
-    ["Auto Sell"] = {type = "toggle", default = false, callback = function(val) Settings.AutoSell = val end},
-    ["Auto Buy"] = {type = "toggle", default = false, callback = function(val) Settings.AutoBuy = val end},
-    
-    -- Статистика (5)
-    ["Show Stats"] = {type = "toggle", default = false, callback = function(val) Settings.ShowStats = val end},
-    ["Show K/D"] = {type = "toggle", default = false, callback = function(val) Settings.ShowKD = val end},
-    ["Show Win Rate"] = {type = "toggle", default = false, callback = function(val) Settings.ShowWinRate = val end},
-    ["Show Accuracy"] = {type = "toggle", default = false, callback = function(val) Settings.ShowAccuracy = val end},
-    ["Reset Stats"] = {type = "button", callback = function() ResetStats() end},
-    
-    -- Инструменты (5)
-    ["Chat Spammer"] = {type = "toggle", default = false, callback = function(val) Settings.ChatSpammer = val end},
-    ["Auto Respond"] = {type = "toggle", default = false, callback = function(val) Settings.AutoRespond = val end},
-    ["Auto Kick"] = {type = "toggle", default = false, callback = function(val) Settings.AutoKick = val end},
-    ["Auto Ban"] = {type = "toggle", default = false, callback = function(val) Settings.AutoBan = val end},
-    ["Auto Report"] = {type = "toggle", default = false, callback = function(val) Settings.AutoReport = val end},
-    
-    -- Безопасность (5)
-    ["Anti Detection"] = {type = "toggle", default = true, callback = function(val) Settings.AntiDetection = val end},
-    ["Anti Crash"] = {type = "toggle", default = true, callback = function(val) Settings.AntiCrash = val end},
-    ["Anti Lag"] = {type = "toggle", default = IsMobile, callback = function(val) Settings.AntiLag = val end},
-    ["Anti Freeze"] = {type = "toggle", default = true, callback = function(val) Settings.AntiFreeze = val end},
-    ["Stealth Mode"] = {type = "toggle", default = false, callback = function(val) Settings.StealthMode = val end},
-    
-    -- Экстра (5)
-    ["Debug Mode"] = {type = "toggle", default = false, callback = function(val) Settings.DebugMode = val end},
-    ["Console Log"] = {type = "toggle", default = false, callback = function(val) Settings.ConsoleLog = val end},
-    ["Screen Shot"] = {type = "button", callback = function() TakeScreenshot() end},
-    ["Record Gameplay"] = {type = "toggle", default = false, callback = function(val) Settings.Record = val end},
-    ["Performance Mode"] = {type = "dropdown", options = {"Auto", "Performance", "Balanced", "Quality"}, default = "Auto", callback = function(val) SetPerformanceMode(val) end},
-}
-
--- ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
-function OpenMenu()
-    MainFrame.Visible = true
-    Background.Visible = true
-    UpdateContent()
+local function IsBlocked(v)
+    if type(v) ~= "string" then return false end
+    local low = v:lower()
+    for _, kw in ipairs(blockedKW) do
+        if low:find(kw, 1, true) then return true end
+    end
+    return false
 end
 
-function CloseMenu()
-    MainFrame.Visible = false
-    Background.Visible = false
+safeHook(function()
+    local oldNC
+    oldNC = hookmetamethod(game, "__namecall", function(self, ...)
+        local m = getnamecallmethod()
+        if m == "Kick" then return end
+        if m == "FireServer" or m == "InvokeServer" then
+            for _, v in ipairs({...}) do
+                if IsBlocked(tostring(v)) then return end
+            end
+        end
+        -- RemoteEvent/Function block
+        local ok,  isRE = pcall(function() return self:IsA("RemoteEvent") end)
+        local ok2, isRF = pcall(function() return self:IsA("RemoteFunction") end)
+        if (ok and isRE) or (ok2 and isRF) then
+            if IsBlocked(self.Name) then return end
+        end
+        return oldNC(self, ...)
+    end)
+end)
+
+safeHook(function()
+    hookfunction(LocalPlayer.Kick, function() return end)
+end)
+
+safeHook(function()
+    local TPS    = game:GetService("TeleportService")
+    local origTp = TPS.Teleport
+    hookfunction(origTp, function(self, placeId, ...)
+        if placeId ~= game.PlaceId then return end
+        return origTp(self, placeId, ...)
+    end)
+end)
+
+safeHook(function()
+    local oldIdx
+    oldIdx = hookmetamethod(game, "__index", function(self, key)
+        local val = oldIdx(self, key)
+        if key == "Fire" then
+            local ok, isB = pcall(function() return self:IsA("BindableEvent") end)
+            if ok and isB and IsBlocked(self.Name) then
+                return function() end
+            end
+        end
+        return val
+    end)
+end)
+
+local ScreenGui -- forward declare для rename task
+task.spawn(function()
+    while task.wait(20) do
+        safeHook(function()
+            if ScreenGui and ScreenGui.Parent then
+                ScreenGui.Name = "Rbx_"..tostring(math.random(0x10000, 0xFFFFF))
+            end
+        end)
+    end
+end)
+
+-- ═══════════════════════════════════════
+-- [ 2 ] SETTINGS
+-- ═══════════════════════════════════════
+local Settings = {
+    Aimbot = {
+        Enabled        = false,
+        Silent         = false,
+        Distance       = 150,
+        SilentDistance = 150,
+        FOV            = 120,
+        Smoothness     = 0.18,
+        TeamCheck      = true,
+        HitPart        = "Head",
+        Key            = Enum.UserInputType.MouseButton2,
+    },
+    ESP = {
+        Enabled     = false,
+        Box         = true,
+        Name        = true,
+        Distance    = true,
+        Health      = true,
+        Weapon      = true,
+        Chams       = false,
+        TeamColor   = true,
+        MaxDistance = 500,
+    },
+    Mobile = UserInputService.TouchEnabled,
+}
+
+-- ═══════════════════════════════════════
+-- [ 3 ] UTILITIES
+-- ═══════════════════════════════════════
+local function GetRoot(char)
+    return char and char:FindFirstChild("HumanoidRootPart")
 end
 
-function ToggleMenu()
-    if MainFrame.Visible then
-        CloseMenu()
-    else
-        OpenMenu()
+local function GetHum(char)
+    return char and char:FindFirstChildOfClass("Humanoid")
+end
+
+local function GetWeapon(char)
+    for _, v in ipairs(char:GetChildren()) do
+        if v:IsA("Tool") then return v.Name end
+    end
+    return "None"
+end
+
+local function Alive(hum)
+    return hum and hum.Health > 0
+end
+
+-- ─── ГЛАВНАЯ ПРОВЕРКА ВРАГА ───
+local function IsEnemy(p)
+    if not p or p == LocalPlayer then return false end
+
+    if Settings.Aimbot.TeamCheck then
+        local myTeam    = LocalPlayer.Team
+        local theirTeam = p.Team
+
+        -- FFA — оба без тима = враги
+        if myTeam == nil and theirTeam == nil then
+            return true
+        end
+
+        -- разные тимы = враг
+        if myTeam ~= theirTeam then
+            return true
+        end
+
+        -- одинаковый тим = свой
+        return false
+    end
+
+    -- TeamCheck выключен — все враги
+    return true
+end
+
+local function W2S(pos)
+    local ok, p = pcall(function()
+        return Camera:WorldToViewportPoint(pos)
+    end)
+    if ok and p then
+        return Vector2.new(p.X, p.Y), p.Z > 0
+    end
+    return nil, false
+end
+
+-- ═══════════════════════════════════════
+-- [ 4 ] FOV CIRCLE
+-- ═══════════════════════════════════════
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Visible   = false
+FOVCircle.Radius    = Settings.Aimbot.FOV
+FOVCircle.Color     = Color3.fromRGB(255, 255, 255)
+FOVCircle.Thickness = 1.5
+FOVCircle.Filled    = false
+FOVCircle.NumSides  = 64
+
+-- ═══════════════════════════════════════
+-- [ 5 ] AIMBOT TARGET
+-- ═══════════════════════════════════════
+local function BestTarget(silent)
+    local best, bestD = nil, math.huge
+    local vp     = Camera.ViewportSize
+    local center = Vector2.new(vp.X / 2, vp.Y / 2)
+    local maxW   = silent and Settings.Aimbot.SilentDistance or Settings.Aimbot.Distance
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        if not IsEnemy(p) then continue end          -- team check тут
+
+        local char = p.Character
+        if not char then continue end
+        local hum = GetHum(char)
+        if not Alive(hum) then continue end
+        local root = GetRoot(char)
+        if not root then continue end
+        if (root.Position - Camera.CFrame.Position).Magnitude > maxW then continue end
+
+        local part = char:FindFirstChild(Settings.Aimbot.HitPart) or root
+        local sc, on = W2S(part.Position)
+        if not sc or not on then continue end
+
+        local d = (sc - center).Magnitude
+        if d < Settings.Aimbot.FOV and d < bestD then
+            best  = part
+            bestD = d
+        end
+    end
+    return best
+end
+
+-- ═══════════════════════════════════════
+-- [ 6 ] SILENT AIM
+-- ═══════════════════════════════════════
+safeHook(function()
+    local oldHook
+    oldHook = hookmetamethod(game, "__index", function(self, key)
+        if key == "Hit" then
+            local ok, isMouse = pcall(function()
+                return self == LocalPlayer:GetMouse()
+            end)
+            if ok and isMouse and Settings.Aimbot.Silent and Settings.Aimbot.Enabled then
+                local t = BestTarget(true) -- уже фильтрует своих
+                if t then return CFrame.new(t.Position) end
+            end
+        end
+        return oldHook(self, key)
+    end)
+end)
+
+-- ═══════════════════════════════════════
+-- [ 7 ] ESP POOL
+-- ═══════════════════════════════════════
+local ESPPool   = {}
+local ChamsPool = {}
+
+local function NewDraw(t, props)
+    local d = Drawing.new(t)
+    for k, v in pairs(props) do d[k] = v end
+    return d
+end
+
+local function MakeESP(p)
+    if p == LocalPlayer then return end
+    ESPPool[p] = {
+        Box    = NewDraw("Square", {Visible=false, Filled=false, Thickness=1.5}),
+        HBar   = NewDraw("Square", {Visible=false, Filled=true,  Color=Color3.fromRGB(20,20,20)}),
+        HFill  = NewDraw("Square", {Visible=false, Filled=true,  Color=Color3.fromRGB(80,255,80)}),
+        Name   = NewDraw("Text",   {Visible=false, Size=13, Center=true, Outline=true, Color=Color3.fromRGB(255,255,255)}),
+        Dist   = NewDraw("Text",   {Visible=false, Size=12, Center=true, Outline=true, Color=Color3.fromRGB(200,200,200)}),
+        HP     = NewDraw("Text",   {Visible=false, Size=12, Center=true, Outline=true, Color=Color3.fromRGB(80,255,80)}),
+        Weapon = NewDraw("Text",   {Visible=false, Size=12, Center=true, Outline=true, Color=Color3.fromRGB(255,200,60)}),
+    }
+end
+
+local function RemoveESP(p)
+    if ESPPool[p] then
+        for _, d in pairs(ESPPool[p]) do pcall(function() d:Remove() end) end
+        ESPPool[p] = nil
     end
 end
 
-function ResetMenuPosition()
-    MainFrame.Position = UDim2.new(0.04, 0, 0.1, 0)
-end
-
-function MinimizeMenu()
-    MainFrame.Size = UDim2.new(0.2, 0, 0.1, 0)
-end
-
-function MaximizeMenu()
-    MainFrame.Size = UDim2.new(0.92, 0, 0.8, 0)
-end
-
-function ResetControls()
-    Settings.MenuKey = "F1"
-    Settings.AimKey = "MouseButton2"
-    Settings.ESPKey = "F2"
-    Settings.FlyKey = "F3"
-    Settings.SpeedKey = "F4"
-    Settings.TeleportKey = "F5"
-    Settings.NoClipKey = "F6"
-    Settings.TriggerKey = "MouseButton1"
-    Settings.SwipeOpen = true
-    Settings.SwipeClose = true
-    Settings.SwipeSensitivity = 100
-end
-
-function SaveProfile()
-    -- Сохранение профиля
-end
-
-function LoadProfile()
-    -- Загрузка профиля
-end
-
-function DeleteProfile()
-    -- Удаление профиля
-end
-
-function ExportProfile()
-    -- Экспорт профиля
-end
-
-function ImportProfile()
-    -- Импорт профиля
-end
-
-function LoadConfig(num)
-    -- Загрузка конфига
-end
-
-function ResetStats()
-    -- Сброс статистики
-end
-
-function TakeScreenshot()
-    -- Скриншот
-end
-
--- ===== ОБНОВЛЕНИЕ МЕНЮ =====
-function UpdateContent()
-    for _, child in pairs(ContentFrame:GetChildren()) do
-        if child:IsA("Frame") or child:IsA("TextButton") or child:IsA("ScrollingFrame") then
-            child:Destroy()
+local function ApplyChams(char, col)
+    if ChamsPool[char] then return end
+    ChamsPool[char] = {}
+    for _, part in ipairs(char:GetDescendants()) do
+        if part:IsA("BasePart") then
+            local b = Instance.new("SelectionBox")
+            b.Color3              = col
+            b.SurfaceColor3       = col
+            b.SurfaceTransparency = 0.45
+            b.LineThickness       = 0.03
+            b.Adornee             = part
+            b.Parent              = workspace
+            table.insert(ChamsPool[char], b)
         end
     end
-    
-    if CurrentTab == "ESP" then
-        CreateESPTab()
-    elseif CurrentTab == "AIM" then
-        CreateAimTab()
-    elseif CurrentTab == "VISUALS" then
-        CreateVisualsTab()
-    elseif CurrentTab == "MISC" then
-        CreateMiscTab()
-    elseif CurrentTab == "SOUNDS" then
-        CreateSoundsTab()
-    elseif CurrentTab == "CONTROLS" then
-        CreateControlsTab()
-    elseif CurrentTab == "EXTRA" then
-        CreateExtraTab()
+end
+
+local function RemoveChams(char)
+    if ChamsPool[char] then
+        for _, b in ipairs(ChamsPool[char]) do
+            pcall(function() b:Destroy() end)
+        end
+        ChamsPool[char] = nil
     end
 end
 
--- ===== ОПТИМИЗАЦИЯ ДЛЯ МОБИЛЫ =====
-if IsMobile then
-    -- Уменьшаем размер кнопок
-    local function ResizeForMobile()
-        MainFrame.Size = UDim2.new(0.95, 0, 0.9, 0)
-        MainFrame.Position = UDim2.new(0.025, 0, 0.05, 0)
-        
-        -- Увеличиваем шрифт
-        for _, child in pairs(MainFrame:GetDescendants()) do
-            if child:IsA("TextLabel") or child:IsA("TextButton") then
-                child.TextScaled = true
+for _, p in ipairs(Players:GetPlayers()) do MakeESP(p) end
+Players.PlayerAdded:Connect(MakeESP)
+Players.PlayerRemoving:Connect(function(p)
+    RemoveESP(p)
+    if p.Character then RemoveChams(p.Character) end
+end)
+
+-- ═══════════════════════════════════════
+-- [ 8 ] MAIN LOOP
+-- ═══════════════════════════════════════
+RunService.RenderStepped:Connect(function()
+    local vp     = Camera.ViewportSize
+    local center = Vector2.new(vp.X / 2, vp.Y / 2)
+
+    -- FOV
+    FOVCircle.Position = center
+    FOVCircle.Radius   = Settings.Aimbot.FOV
+    FOVCircle.Visible  = Settings.Aimbot.Enabled and not Settings.Aimbot.Silent
+
+    -- Aimbot PC
+    if Settings.Aimbot.Enabled and not Settings.Aimbot.Silent then
+        if UserInputService:IsMouseButtonPressed(Settings.Aimbot.Key) then
+            local t = BestTarget(false)
+            if t then
+                local sc, on = W2S(t.Position)
+                if on and sc then
+                    local mouse = UserInputService:GetMouseLocation()
+                    local delta = sc - mouse
+                    mousemoverel(
+                        delta.X * Settings.Aimbot.Smoothness,
+                        delta.Y * Settings.Aimbot.Smoothness
+                    )
+                end
             end
         end
     end
-    ResizeForMobile()
-    
-    -- Отключаем тяжелые функции на мобиле
-    Settings.ShowSkeleton = false
-    Settings.ShowChams = false
-    Settings.ShowTrails = false
-    Settings.ShowParticles = false
-    Settings.ShowShadows = false
+
+    -- ESP
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p == LocalPlayer then continue end
+        local obj = ESPPool[p]
+        if not obj then continue end
+
+        local char = p.Character
+        local hum  = char and GetHum(char)
+        local root = char and GetRoot(char)
+
+        -- ─── СВОЙ ИГРОК — скрываем всё ───
+        if not IsEnemy(p) then
+            for _, d in pairs(obj) do d.Visible = false end
+            if char then RemoveChams(char) end
+            continue
+        end
+
+        if not char or not hum or not root or not Alive(hum) then
+            for _, d in pairs(obj) do d.Visible = false end
+            if char then RemoveChams(char) end
+            continue
+        end
+
+        local worldD = (root.Position - Camera.CFrame.Position).Magnitude
+        if worldD > Settings.ESP.MaxDistance then
+            for _, d in pairs(obj) do d.Visible = false end
+            continue
+        end
+
+        -- Team color
+        local tCol = Settings.ESP.TeamColor
+            and Color3.fromRGB(255, 60, 60)   -- враг всегда красный
+            or  Color3.fromRGB(255, 60, 60)
+
+        -- Chams
+        if Settings.ESP.Chams then
+            ApplyChams(char, tCol)
+        else
+            RemoveChams(char)
+        end
+
+        if not Settings.ESP.Enabled then
+            for _, d in pairs(obj) do d.Visible = false end
+            continue
+        end
+
+        -- Box calc
+        local top, tOn = W2S(root.Position + Vector3.new(0, 3.2, 0))
+        local bot, bOn = W2S(root.Position - Vector3.new(0, 3.2, 0))
+        if not tOn or not bOn or not top or not bot then
+            for _, d in pairs(obj) do d.Visible = false end
+            continue
+        end
+
+        local h  = math.abs(top.Y - bot.Y)
+        local w  = h * 0.55
+        local bx = top.X - w / 2
+        local by = top.Y
+
+        obj.Box.Visible  = Settings.ESP.Box
+        obj.Box.Position = Vector2.new(bx, by)
+        obj.Box.Size     = Vector2.new(w, h)
+        obj.Box.Color    = tCol
+
+        local hp = math.clamp(hum.Health / math.max(hum.MaxHealth, 1), 0, 1)
+        obj.HBar.Visible  = true
+        obj.HBar.Position = Vector2.new(bx - 6, by)
+        obj.HBar.Size     = Vector2.new(4, h)
+        obj.HFill.Visible  = true
+        obj.HFill.Position = Vector2.new(bx - 6, by + h * (1 - hp))
+        obj.HFill.Size     = Vector2.new(4, h * hp)
+        obj.HFill.Color    = Color3.fromRGB(
+            math.floor(255 * (1 - hp)),
+            math.floor(255 * hp),
+            0
+        )
+
+        obj.Name.Visible  = Settings.ESP.Name
+        obj.Name.Text     = p.Name
+        obj.Name.Position = Vector2.new(top.X, by - 15)
+
+        obj.Dist.Visible  = Settings.ESP.Distance
+        obj.Dist.Text     = string.format("[%.0fm]", worldD)
+        obj.Dist.Position = Vector2.new(top.X, by + h + 2)
+
+        obj.HP.Visible    = Settings.ESP.Health
+        obj.HP.Text       = string.format("HP %.0f", hum.Health)
+        obj.HP.Position   = Vector2.new(top.X, by + h + 14)
+
+        obj.Weapon.Visible  = Settings.ESP.Weapon
+        obj.Weapon.Text     = GetWeapon(char)
+        obj.Weapon.Position = Vector2.new(top.X, by + h + 26)
+    end
+end)
+
+-- ═══════════════════════════════════════
+-- [ 9 ] GUI
+-- ═══════════════════════════════════════
+ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name            = "Rbx_"..math.random(0x10000, 0xFFFFF)
+ScreenGui.ResetOnSpawn    = false
+ScreenGui.ZIndexBehavior  = Enum.ZIndexBehavior.Sibling
+ScreenGui.IgnoreGuiInset  = true
+
+if syn and syn.protect_gui then
+    syn.protect_gui(ScreenGui)
+    ScreenGui.Parent = game:GetService("CoreGui")
+elseif gethui then
+    ScreenGui.Parent = gethui()
+else
+    ScreenGui.Parent = game:GetService("CoreGui")
 end
 
--- ===== ЗАПУСК =====
-print("🚀 BBC ULTIMATE v6.0 ЗАГРУЖЕН!")
-print("📱 Устройство: " .. (IsMobile and "МОБИЛА" or "ПК"))
-print("⚡ Режим: " .. Performance.Mode)
-print("🎯 Функций: 148+")
-print("🔊 Звуковых паков: 12")
-print("💪 Оптимизация: МАКСИМАЛЬНАЯ")
+-- ─── MAIN FRAME ───
+local Main = Instance.new("Frame")
+Main.Size            = UDim2.new(0, 420, 0, 320)
+Main.Position        = UDim2.new(0.5, -210, 0.5, -160)
+Main.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
+Main.BorderSizePixel = 0
+Main.ClipsDescendants = true
+Main.Visible         = true
+Main.Parent          = ScreenGui
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 10)
+local ms = Instance.new("UIStroke", Main)
+ms.Color     = Color3.fromRGB(50, 50, 100)
+ms.Thickness = 1.5
 
--- Уведомление
-game.StarterGui:SetCore("SendNotification", {
-    Title = "BBC ULTIMATE v6.0",
-    Text = "Оптимизация включена! FPS: " .. math.round(game:GetService("Stats").Fps),
-    Duration = 3,
-})
+-- ─── TITLEBAR ───
+local TB = Instance.new("Frame")
+TB.Size             = UDim2.new(1, 0, 0, 34)
+TB.BackgroundColor3 = Color3.fromRGB(16, 16, 28)
+TB.BorderSizePixel  = 0
+TB.Parent           = Main
+Instance.new("UICorner", TB).CornerRadius = UDim.new(0, 10)
+
+local TL = Instance.new("TextLabel")
+TL.Size              = UDim2.new(1, -10, 1, 0)
+TL.Position          = UDim2.new(0, 12, 0, 0)
+TL.BackgroundTransparency = 1
+TL.Text              = "⚡ ONYX v67  |  Chechnya 1994"
+TL.TextColor3        = Color3.fromRGB(210, 210, 255)
+TL.Font              = Enum.Font.GothamBold
+TL.TextSize          = 13
+TL.TextXAlignment    = Enum.TextXAlignment.Left
+TL.Parent            = TB
+
+-- ─── DRAG ───
+local drag, dragStart, startPos = false, nil, nil
+TB.InputBegan:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1
+    or i.UserInputType == Enum.UserInputType.Touch then
+        drag = true
+        dragStart = i.Position
+        startPos  = Main.Position
+    end
+end)
+TB.InputEnded:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1
+    or i.UserInputType == Enum.UserInputType.Touch then
+        drag = false
+    end
+end)
+UserInputService.InputChanged:Connect(function(i)
+    if drag and (i.UserInputType == Enum.UserInputType.MouseMovement
+    or i.UserInputType == Enum.UserInputType.Touch) then
+        local d = i.Position - dragStart
+        Main.Position = UDim2.new(
+            startPos.X.Scale, startPos.X.Offset + d.X,
+            startPos.Y.Scale, startPos.Y.Offset + d.Y
+        )
+    end
+end)
+
+-- ─── TABBAR ───
+local TabBar = Instance.new("Frame")
+TabBar.Size             = UDim2.new(1, 0, 0, 28)
+TabBar.Position         = UDim2.new(0, 0, 0, 34)
+TabBar.BackgroundColor3 = Color3.fromRGB(14, 14, 24)
+TabBar.BorderSizePixel  = 0
+TabBar.Parent           = Main
+local tbl = Instance.new("UIListLayout", TabBar)
+tbl.FillDirection = Enum.FillDirection.Horizontal
+tbl.Padding       = UDim.new(0, 2)
+
+-- ─── CONTENT ───
+local Content = Instance.new("Frame")
+Content.Size                = UDim2.new(1, 0, 1, -62)
+Content.Position            = UDim2.new(0, 0, 0, 62)
+Content.BackgroundTransparency = 1
+Content.Parent              = Main
+
+-- ─── HELPERS ───
+local Tabs = {}
+
+local function MakeScroll(parent)
+    local s = Instance.new("ScrollingFrame")
+    s.Size                  = UDim2.new(1, 0, 1, 0)
+    s.BackgroundTransparency = 1
+    s.BorderSizePixel       = 0
+    s.ScrollBarThickness    = 3
+    s.ScrollBarImageColor3  = Color3.fromRGB(70, 70, 140)
+    s.AutomaticCanvasSize   = Enum.AutomaticSize.Y
+    s.CanvasSize            = UDim2.new(0, 0, 0, 0)
+    s.Parent                = parent
+    local ul = Instance.new("UIListLayout", s)
+    ul.Padding    = UDim.new(0, 7)
+    ul.SortOrder  = Enum.SortOrder.LayoutOrder
+    local pad = Instance.new("UIPadding", s)
+    pad.PaddingLeft  = UDim.new(0, 12)
+    pad.PaddingRight = UDim.new(0, 12)
+    pad.PaddingTop   = UDim.new(0, 8)
+    return s
+end
+
+local function MakeTab(name, icon)
+    local btn = Instance.new("TextButton")
+    btn.Size             = UDim2.new(0, 96, 1, 0)
+    btn.BackgroundColor3 = Color3.fromRGB(14, 14, 24)
+    btn.BorderSizePixel  = 0
+    btn.Text             = icon.." "..name
+    btn.TextColor3       = Color3.fromRGB(110, 110, 170)
+    btn.Font             = Enum.Font.GothamSemibold
+    btn.TextSize         = 12
+    btn.Parent           = TabBar
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+
+    local page = Instance.new("Frame")
+    page.Size                = UDim2.new(1, 0, 1, 0)
+    page.BackgroundTransparency = 1
+    page.Visible             = false
+    page.Parent              = Content
+
+    local scroll = MakeScroll(page)
+    Tabs[name] = {Btn=btn, Page=page, Scroll=scroll}
+
+    btn.MouseButton1Click:Connect(function()
+        for _, t in pairs(Tabs) do
+            t.Page.Visible       = false
+            t.Btn.BackgroundColor3 = Color3.fromRGB(14, 14, 24)
+            t.Btn.TextColor3     = Color3.fromRGB(110, 110, 170)
+        end
+        page.Visible         = true
+        btn.BackgroundColor3 = Color3.fromRGB(28, 28, 52)
+        btn.TextColor3       = Color3.fromRGB(220, 220, 255)
+    end)
+
+    -- touch поддержка таба
+    btn.Activated:Connect(function()
+        for _, t in pairs(Tabs) do
+            t.Page.Visible       = false
+            t.Btn.BackgroundColor3 = Color3.fromRGB(14, 14, 24)
+            t.Btn.TextColor3     = Color3.fromRGB(110, 110, 170)
+        end
+        page.Visible         = true
+        btn.BackgroundColor3 = Color3.fromRGB(28, 28, 52)
+        btn.TextColor3       = Color3.fromRGB(220, 220, 255)
+    end)
+
+    return Tabs[name]
+end
+
+local function Sep(parent, text)
+    local f = Instance.new("Frame")
+    f.Size                = UDim2.new(1, 0, 0, 16)
+    f.BackgroundTransparency = 1
+    f.Parent              = parent
+    local l = Instance.new("TextLabel")
+    l.Size             = UDim2.new(1, 0, 1, 0)
+    l.BackgroundTransparency = 1
+    l.Text             = "─── "..text.." ───"
+    l.TextColor3       = Color3.fromRGB(70, 70, 140)
+    l.Font             = Enum.Font.GothamBold
+    l.TextSize         = 11
+    l.TextXAlignment   = Enum.TextXAlignment.Left
+    l.Parent           = f
+end
+
+local function Toggle(parent, label, default, cb)
+    local row = Instance.new("Frame")
+    row.Size                = UDim2.new(1, 0, 0, 26)
+    row.BackgroundTransparency = 1
+    row.Parent              = parent
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Size             = UDim2.new(0.75, 0, 1, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text             = label
+    lbl.TextColor3       = Color3.fromRGB(190, 190, 215)
+    lbl.Font             = Enum.Font.Gotham
+    lbl.TextSize         = 12
+    lbl.TextXAlignment   = Enum.TextXAlignment.Left
+    lbl.Parent           = row
+
+    local bg = Instance.new("Frame")
+    bg.Size             = UDim2.new(0, 36, 0, 18)
+    bg.Position         = UDim2.new(1, -36, 0.5, -9)
+    bg.BackgroundColor3 = default and Color3.fromRGB(70, 70, 200) or Color3.fromRGB(45, 45, 55)
+    bg.Parent           = row
+    Instance.new("UICorner", bg).CornerRadius = UDim.new(1, 0)
+
+    local knob = Instance.new("Frame")
+    knob.Size             = UDim2.new(0, 14, 0, 14)
+    knob.Position         = default and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)
+    knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    knob.Parent           = bg
+    Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+
+    local state = default
+    local btn = Instance.new("TextButton")
+    btn.Size                = UDim2.new(1, 0, 1, 0)
+    btn.BackgroundTransparency = 1
+    btn.Text                = ""
+    btn.Parent              = row
+
+    local function flip()
+        state = not state
+        bg.BackgroundColor3 = state and Color3.fromRGB(70, 70, 200) or Color3.fromRGB(45, 45, 55)
+        knob.Position = state and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)
+        cb(state)
+    end
+
+    btn.MouseButton1Click:Connect(flip)
+    btn.Activated:Connect(flip) -- touch
+end
+
+local function Slider(parent, label, min, max, default, cb)
+    local wrap = Instance.new("Frame")
+    wrap.Size                = UDim2.new(1, 0, 0, 42)
+    wrap.BackgroundTransparency = 1
+    wrap.Parent              = parent
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Size             = UDim2.new(1, 0, 0, 16)
+    lbl.BackgroundTransparency = 1
+    lbl.Text             = label..":  "..default
+    lbl.TextColor3       = Color3.fromRGB(180, 180, 205)
+    lbl.Font             = Enum.Font.Gotham
+    lbl.TextSize         = 12
+    lbl.TextXAlignment   = Enum.TextXAlignment.Left
+    lbl.Parent           = wrap
+
+    local track = Instance.new("Frame")
+    track.Size             = UDim2.new(1, 0, 0, 5)
+    track.Position         = UDim2.new(0, 0, 0, 24)
+    track.BackgroundColor3 = Color3.fromRGB(35, 35, 55)
+    track.Parent           = wrap
+    Instance.new("UICorner", track).CornerRadius = UDim.new(1, 0)
+
+    local fill = Instance.new("Frame")
+    fill.Size             = UDim2.new((default-min)/(max-min), 0, 1, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(70, 70, 200)
+    fill.Parent           = track
+    Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
+
+    local handle = Instance.new("Frame")
+    handle.Size             = UDim2.new(0, 11, 0, 11)
+    handle.Position         = UDim2.new((default-min)/(max-min), -5, 0.5, -5)
+    handle.BackgroundColor3 = Color3.fromRGB(190, 190, 255)
+    handle.Parent           = track
+    Instance.new("UICorner", handle).CornerRadius = UDim.new(1, 0)
+
+    local draggingS = false
+    local function Upd(x)
+        local rel = math.clamp((x - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+        local val = math.floor(min + rel * (max - min))
+        fill.Size       = UDim2.new(rel, 0, 1, 0)
+        handle.Position = UDim2.new(rel, -5, 0.5, -5)
+        lbl.Text        = label..":  "..val
+        cb(val)
+    end
+
+    track.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1
+        or i.UserInputType == Enum.UserInputType.Touch then
+            draggingS = true
+            Upd(i.Position.X)
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(i)
+        if draggingS and (i.UserInputType == Enum.UserInputType.MouseMovement
+        or i.UserInputType == Enum.UserInputType.Touch) then
+            Upd(i.Position.X)
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1
+        or i.UserInputType == Enum.UserInputType.Touch then
+            draggingS = false
+        end
+    end)
+end
+
+-- ─── BUILD TABS ───
+local tAim = MakeTab("AIM", "🎯")
+local tESP = MakeTab("ESP", "👁")
+
+-- AIM tab
+local aS = tAim.Scroll
+Sep(aS, "Aimbot")
+Toggle(aS, "Enable Aimbot", false, function(v) Settings.Aimbot.Enabled = v end)
+Slider(aS, "Aim Distance",  0, 300, 150, function(v) Settings.Aimbot.Distance = v end)
+Slider(aS, "FOV",           0, 250, 120, function(v) Settings.Aimbot.FOV = v end)
+Sep(aS, "Silent Aim")
+Toggle(aS, "Enable Silent", false, function(v) Settings.Aimbot.Silent = v end)
+Slider(aS, "Silent Distance", 0, 300, 150, function(v) Settings.Aimbot.SilentDistance = v end)
+Sep(aS, "Options")
+Toggle(aS, "Team Check", true, function(v) Settings.Aimbot.TeamCheck = v end)
+
+-- ESP tab
+local eS = tESP.Scroll
+Sep(eS, "ESP")
+Toggle(eS, "Enable ESP", false, function(v) Settings.ESP.Enabled = v end)
+Toggle(eS, "Box",         true,  function(v) Settings.ESP.Box = v end)
+Sep(eS, "Chams")
+Toggle(eS, "Enable Chams", false, function(v)
+    Settings.ESP.Chams = v
+    if not v then
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and p.Character then RemoveChams(p.Character) end
+        end
+    end
+end)
+Toggle(eS, "Team Colors", true, function(v) Settings.ESP.TeamColor = v end)
+Sep(eS, "Labels")
+Toggle(eS, "Name",     true, function(v) Settings.ESP.Name = v end)
+Toggle(eS, "Distance", true, function(v) Settings.ESP.Distance = v end)
+Toggle(eS, "Health",   true, function(v) Settings.ESP.Health = v end)
+Toggle(eS, "Weapon",   true, function(v) Settings.ESP.Weapon = v end)
+
+-- open first tab
+Tabs["AIM"].Btn:Activate()
+
+-- ─── PC HIDE TOGGLE ───
+UserInputService.InputBegan:Connect(function(i)
+    if i.KeyCode == Enum.KeyCode.RightShift then
+        Main.Visible = not Main.Visible
+    end
+end)
+
+-- ═══════════════════════════════════════
+-- [ 10 ] MOBILE FLOATING "L" BUTTON
+-- ═══════════════════════════════════════
+if Settings.Mobile then
+    local FloatBtn = Instance.new("TextButton")
+    FloatBtn.Size             = UDim2.new(0, 48, 0, 48)
+    FloatBtn.Position         = UDim2.new(0, 16, 0.5, -24)
+    FloatBtn.BackgroundColor3 = Color3.fromRGB(28, 28, 52)
+    FloatBtn.Text             = "L"
+    FloatBtn.TextColor3       = Color3.fromRGB(210, 210, 255)
+    FloatBtn.Font             = Enum.Font.GothamBold
+    FloatBtn.TextSize         = 20
+    FloatBtn.ZIndex           = 999
+    FloatBtn.Parent           = ScreenGui
+    Instance.new("UICorner", FloatBtn).CornerRadius = UDim.new(1, 0)
+    local fs = Instance.new("UIStroke", FloatBtn)
+    fs.Color     = Color3.fromRGB(70, 70, 200)
+    fs.Thickness = 2
+
+    -- drag floating button
+    local fbDrag, fbStart, fbPos = false, nil, nil
+    FloatBtn.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.Touch then
+            fbDrag = true
+            fbStart = i.Position
+            fbPos   = FloatBtn.Position
+        end
+    end)
+    FloatBtn.InputEnded:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.Touch then
+            fbDrag = false
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(i)
+        if fbDrag and i.UserInputType == Enum.UserInputType.Touch then
+            local d = i.Position - fbStart
+            FloatBtn.Position = UDim2.new(
+                fbPos.X.Scale, fbPos.X.Offset + d.X,
+                fbPos.Y.Scale, fbPos.Y.Offset + d.Y
+            )
+        end
+    end)
+
+    FloatBtn.Activated:Connect(function()
+        Main.Visible = not Main.Visible
+        FloatBtn.BackgroundColor3 = Main.Visible
+            and Color3.fromRGB(70, 70, 200)
+            or  Color3.fromRGB(28, 28, 52)
+    end)
+end
